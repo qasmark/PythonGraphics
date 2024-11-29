@@ -1,4 +1,7 @@
+import csv
+import argparse
 import matplotlib.pyplot as plt
+
 
 def adjust_time_with_workers(t_base, c):
     """
@@ -7,6 +10,7 @@ def adjust_time_with_workers(t_base, c):
     if c == 0:
         return float('inf')
     return t_base / c
+
 
 def calculate_times(goods, conveyors):
     """Рассчитывает T_посл, T_пар, T_опт с подробным выводом."""
@@ -25,6 +29,7 @@ def calculate_times(goods, conveyors):
     t_opt_str = f"({times_str}) + ({goods} - 1) * max({', '.join([str(t) for t in times])}) = {sum(times):.2f} + ({goods} - 1) * {max(times):.2f} = {sum(times) + (goods - 1) * max(times):.2f}"
 
     return t_posl, t_par, t_opt, t_posl_str, t_par_str, t_opt_str
+
 
 def plot_conveyor_schedule(schedule, title,  t_posl_str=None, t_par_str=None, t_opt_str=None):
     """
@@ -56,9 +61,9 @@ def plot_conveyor_schedule(schedule, title,  t_posl_str=None, t_par_str=None, t_
         plt.text(0.05, 0.90, f"T_пар = {t_par_str}", transform=plt.gca().transAxes, fontsize=11)
     if t_opt_str is not None:
         plt.text(0.05, 0.85, f"T_опт = {t_opt_str}", transform=plt.gca().transAxes, fontsize=11)
-
     
     plt.show()
+
 
 def sequential_organization_schedule(goods, conveyors):
     """
@@ -77,6 +82,7 @@ def sequential_organization_schedule(goods, conveyors):
         current_time += processing_time
 
     return schedule
+
 
 def parallel_organization_schedule(goods, conveyors):
     """
@@ -111,6 +117,7 @@ def parallel_organization_schedule(goods, conveyors):
 
     return schedule
 
+
 def optimized_continuous_schedule(goods, conveyors):
     """
     Создает оптимизированное расписание без простоя конвейеров.
@@ -139,26 +146,48 @@ def optimized_continuous_schedule(goods, conveyors):
     return schedule
 
 
-goods_count = 4
-conveyors = [
-    {'m': 1, 't': 2, 'c': 1},
-    {'m': 2, 't': 3, 'c': 1},
-    {'m': 3, 't': 1, 'c': 1}
-]
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Расчет времени обработки товаров на конвейерах.')
+    parser.add_argument('input_file', type=str, help='Путь к CSV файлу с входными данными.')
+    args = parser.parse_args()
 
-t_posl, t_par, t_opt, t_posl_str, t_par_str, t_opt_str = calculate_times(goods_count, conveyors)
-seq_schedule = sequential_organization_schedule(goods_count, conveyors.copy())
-par_schedule = parallel_organization_schedule(goods_count, conveyors.copy())
-optimized_schedule = optimized_continuous_schedule(goods_count, conveyors.copy())
+    try:
+        conveyors = []
+        goods_count = 0
 
+        with open(args.input_file, 'r') as csvfile:
+            reader = csv.reader(csvfile, delimiter=';')
+            for row in reader:
+                row = [x for x in row if x]
+                if row:
+                    if row[0] == 'n':
+                        goods_count = int(row[1])
+                    elif row[0] == 'm':
+                        conveyor = {}
+                        conveyor['m'] = int(row[1])
+                        for i in range(2, len(row), 2):
+                            conveyor[row[i]] = int(row[i+1])
+                        conveyors.append(conveyor)
 
+        if not goods_count or not conveyors:
+            raise ValueError("Неверный формат входных данных. Убедитесь, что файл содержит 'n' и данные о конвейерах 'm'.")
 
-plot_conveyor_schedule(seq_schedule, "Последовательная организация", t_posl_str=t_posl_str)
-plot_conveyor_schedule(par_schedule, "Параллельная организация", t_par_str=t_par_str)
-plot_conveyor_schedule(optimized_schedule, "Оптимизированная непрерывная организация", t_opt_str=t_opt_str)
+        t_posl, t_par, t_opt, t_posl_str, t_par_str, t_opt_str = calculate_times(goods_count, conveyors)
+        seq_schedule = sequential_organization_schedule(goods_count, conveyors.copy())
+        par_schedule = parallel_organization_schedule(goods_count, conveyors.copy())
+        optimized_schedule = optimized_continuous_schedule(goods_count, conveyors.copy())
 
+        plot_conveyor_schedule(seq_schedule, "Последовательная организация", t_posl_str=t_posl_str)
+        plot_conveyor_schedule(par_schedule, "Параллельная организация", t_par_str=t_par_str)
+        plot_conveyor_schedule(optimized_schedule, "Оптимизированная непрерывная организация", t_opt_str=t_opt_str)
 
+        print(f"T_посл = {t_posl_str}")
+        print(f"T_пар = {t_par_str}")
+        print(f"T_опт = {t_opt_str}")
 
-print(f"$T_{{посл}} = {t_posl_str}")
-print(f"$T_{{пар}} = {t_par_str}")
-print(f"$T_{{опт}} = {t_opt_str}")
+    except FileNotFoundError:
+        print(f"Ошибка: файл {args.input_file} не найден.")
+    except ValueError as e:
+        print(f"Ошибка: {e}")
+    except Exception as e:
+        print(f"Непредвиденная ошибка: {e}")
