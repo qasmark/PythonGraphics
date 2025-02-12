@@ -1,6 +1,7 @@
 import random
 import math
 import pygame
+import os
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -56,6 +57,7 @@ class Dice:
         self.generate_number_vertices()
         self.is_sleeping = False
         self.grounded_timer = 0
+        self.collision_hook = None
 
         if self.num_sides == 4:
             self.mass = 0.8
@@ -276,7 +278,9 @@ class Dice:
 
                 penetration_depth = -min_distance
                 self.position[1] += penetration_depth
-                bounce_sound.play()
+
+                if self.collision_hook:
+                    self.collision_hook(True)
 
                 # --- Расчет и вывод энергии ---
                 kinetic_energy_linear = 0.5 * self.mass * sum(v ** 2 for v in self.velocity)
@@ -291,6 +295,9 @@ class Dice:
 
         else:
             self.grounded_timer = 0
+
+            if self.collision_hook:
+                self.collision_hook(False)
 
         # --- Проверка остановки ---
         if self.grounded_timer > 0.1 and self.is_stable() and all(
@@ -354,6 +361,9 @@ class Dice:
                     self.result = i + 1
 
         print(f"Result: {self.result}")
+
+    def set_collision_hook(self, fn):
+        self.collision_hook = fn
 
 
 # --- Функции ---
@@ -541,16 +551,38 @@ def handle_input():
             camera_y += up_y * speed
 
 
+class CollisionSound:
+    def __init__(self):
+        self.current_state = False
+        self.parts = [os.path.join("sound", f"dub-{i}.mp3") for i in range(29)]
+        self.generator = self.get_by_part()
+
+    def get_by_part(self):
+        for dub in self.parts:
+            yield pygame.mixer.Sound(dub).play()
+
+    def play_sound(self, collision):
+        self.current_state = collision
+
+        try:
+            if self.current_state and not pygame.mixer.Channel(0).get_busy():
+                next(self.generator)
+        except StopIteration:
+            self.generator = self.get_by_part()
+
+
 def main():
     global dice, current_dice_type, bounce_sound, camera_x, camera_y, camera_z, camera_yaw, camera_pitch, flying_mode, skybox_texture
     pygame.init()
     pygame.mixer.init()
     bounce_sound = pygame.mixer.Sound("bounce.wav")
+    collision_sound = CollisionSound()
 
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), DOUBLEBUF | OPENGL)
     pygame.display.set_caption("Dice Rolling Simulation")
     current_dice_type = DEFAULT_DICE_TYPE
     dice = Dice(current_dice_type, size=1.5)
+    dice.set_collision_hook(collision_sound.play_sound)
     dice.position = [0, 3, 0]
 
     camera_x = 0
@@ -558,7 +590,7 @@ def main():
     camera_z = -10
     camera_yaw = 0
     camera_pitch = 20
-    flying_mode = False
+    flying_mode = True
 
     skybox_texture = load_texture("sky.jpg")
     if skybox_texture is None:
